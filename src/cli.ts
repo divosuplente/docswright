@@ -21,13 +21,19 @@ async function syncFromConfig(config: DocsWrightConfig): Promise<void> {
   await syncAll(projectRoot, fetched);
 }
 
-const invoked = path.basename(process.argv[1] ?? 'docswright', path.extname(process.argv[1] ?? ''));
+// Both bins point here, so report whichever name was invoked. Strip only a
+// known script extension: a bin name may legitimately contain other dots.
+const invoked = path.basename(process.argv[1] ?? 'docswright').replace(/\.(mjs|cjs|js|cmd)$/, '');
+// Single source of truth for --version; package.json ships in every tarball.
+const { version } = JSON.parse(
+  fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+) as { version: string };
 
 const program = new Command();
 program
   .name(invoked)
   .description('Aggregate markdown docs from local/git components and serve an editable wiki.')
-  .version('0.1.0');
+  .version(version);
 
 program
   .command('new <kind> <dir>')
