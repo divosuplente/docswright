@@ -29,6 +29,14 @@
     "wiki",
     "antora"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/divosuplente/docswright.git"
+  },
+  "homepage": "https://github.com/divosuplente/docswright#readme",
+  "bugs": {
+    "url": "https://github.com/divosuplente/docswright/issues"
+  },
   "scripts": {
     "docswright": "node bin/docswright.mjs",
     "sync": "node bin/docswright.mjs sync",
