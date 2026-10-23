@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>docswright · Wiki admin</title>
+<style>
+*{box-sizing:border-box}
+:root{
+  --bg:#f3f5f7; --panel:#ffffff; --text:#24292f; --muted:#6b7280; --border:#d7dce1;
+  --accent:#0366d6; --err:#cf222e; --ok:#1a7f37; --hover:#eef1f4;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#11151a; --panel:#171d24; --text:#e6edf3; --muted:#8b949e; --border:#2d343d;
+    --accent:#388bfd; --err:#f85149; --ok:#3fb950; --hover:#21262d;
+  }
+}
+html,body{height:100%}
+body{margin:0;display:flex;flex-direction:column;font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--border);flex:0 0 auto}
+header h1{font-size:15px;font-weight:600;margin:0}
+#rebuildStatus{margin-left:auto;font-size:12px;color:var(--muted)}
+#rebuildStatus.ok{color:var(--ok)}
+#rebuildStatus.err{color:var(--err)}
+#layout{flex:1;display:flex;min-height:0}
+#sidebar{width:280px;min-width:220px;flex:0 0 auto;border-right:1px solid var(--border);background:var(--panel);padding:10px;overflow-y:auto}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+button{font:inherit;font-size:13px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);cursor:pointer}
+button:hover:not(:disabled){background:var(--hover)}
+button:disabled{opacity:.45;cursor:default}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.primary:hover:not(:disabled){filter:brightness(1.08)}
+#tree{list-style:none;margin:0;padding:0}
+#tree li{padding:5px 8px;border-radius:6px;cursor:pointer;font-size:13px;word-break:break-word}
+#tree li:hover{background:var(--hover)}
+#tree li.active{background:var(--hover);font-weight:600}
+#tree li.empty{color:var(--muted);cursor:default}
+#tree li.empty:hover{background:none}
+.muted{color:var(--muted);font-size:12px}
+main{flex:1;display:flex;flex-direction:column;min-width:0;padding:12px 16px}
+#pageLabel{margin-left:auto;word-break:break-all}
+#editor{flex:1;min-height:0;resize:none;border:1px solid var(--border);border-radius:6px;padding:10px;background:var(--panel);color:var(--text);font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;tab-size:2}
+#editor:focus{outline:2px solid var(--accent);outline-offset:-1px}
+#toast{min-height:20px;font-size:12px;margin-top:8px;word-break:break-word}
+#toast.err{color:var(--err)}
+#toast.ok{color:var(--ok)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Wiki admin</h1>
+  <span id="rebuildStatus">Ready</span>
+</header>
+<div id="layout">
+  <aside id="sidebar">
+    <div class="row">
+      <button id="btnNew">New page</button>
+      <button id="btnRefresh">Refresh tree</button>
+    </div>
+    <ul id="tree"><li class="empty">Loading…</li></ul>
+  </aside>
+  <main>
+    <div class="row">
+      <button class="primary" id="btnSave" disabled>Save</button>
+      <button id="btnRename" disabled>Rename</button>
+      <button id="btnDelete" disabled>Delete</button>
+      <span id="pageLabel" class="muted">(no page)</span>
+    </div>
+    <textarea id="editor" spellcheck="false" placeholder="Select a page on the left, or create a new one."></textarea>
+    <div id="toast"></div>
+  </main>
+</div>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const treeEl = $('tree'), editor = $('editor'), pageLabel = $('pageLabel'),
+      rebuildStatus = $('rebuildStatus'), toastEl = $('toast');
+let currentPath = null;
+let baseContent = '';
+let pages = [];
+let rebuildTimer = null;
+let rebuildTicks = 0;
+let toastTimer = null;
+
+const dirty = () => editor.value !== baseContent;
+
+function toast(msg, kind) {
+  toastEl.textContent = msg || '';
+  toastEl.className = kind || '';
+  clearTimeout(toastTimer);
+  if (msg) toastTimer = setTimeout(() => { toastEl.textContent = ''; toastEl.className = ''; }, 6000);
+}
+
+// fetch wrapper: surfaces server JSON/text as the error message
+async function api(method, url, body) {
+  const res = await fetch(url, {
+    method,
+    headers: body ? { 'content-type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  let text = '';
+  try { text = await res.text(); } catch (_) { /* no body */ }
+  if (!res.ok) {
+    let msg = text.trim();
+    try { const j = JSON.parse(text); msg = j.error || j.message || msg; } catch (_) { /* not JSON */ }
+    throw new Error(msg || (res.status + ' ' + res.statusText).trim());
+  }
+  if (!text) return {};
+  try { return JSON.parse(text); } catch (_) { return text; }
+}
+
+async function loadTree() {
+  const data = await api('GET', '/_admin/api/tree');
+  pages = (data.pages || []).slice().sort();
+  renderTree();
+}
+
+function renderTree() {
+  treeEl.textContent = '';
+  for (const p of pages) {
+    const li = document.createElement('li');
+    li.textContent = p;
+    if (p === currentPath) li.className = 'active';
+    li.addEventListener('click', () => openPage(p));
+    treeEl.appendChild(li);
+  }
+  if (!pages.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = '(no pages)';
+    treeEl.appendChild(li);
+  }
+}
+
+async function openPage(path) {
+  if (dirty() && confirm('Discard unsaved changes?') === false) return;
+  try {
+    const data = await api('GET', '/_admin/api/pages?path=' + encodeURIComponent(path));
+    currentPath = path;
+    baseContent = data.content ?? '';
+    editor.value = baseContent;
+    pageLabel.textContent = path;
+    updateButtons();
+    renderTree();
+  } catch (e) {
+    toast('Load failed: ' + e.message, 'err');
+  }
+}
+
+function updateButtons() {
+  $('btnSave').disabled = !currentPath;
+  $('btnRename').disabled = !currentPath;
+  $('btnDelete').disabled = !currentPath;
+}
+
+function clearEditor() {
+  currentPath = null;
+  baseContent = '';
+  editor.value = '';
+  pageLabel.textContent = '(no page)';
+  updateButtons();
+  renderTree();
+}
+
+function afterAction() {
+  loadTree().catch((e) => toast('Tree refresh failed: ' + e.message, 'err'));
+  startRebuildPoll();
+}
+
+function setRebuild(msg, kind) {
+  rebuildStatus.textContent = msg;
+  rebuildStatus.className = kind || '';
+}
+
+function isRebuilding(d) {
+  if (typeof d.rebuilding === 'boolean') return d.rebuilding;
+  if (typeof d.status === 'string') {
+    return !['idle', 'ok', 'done', 'built', 'complete', 'completed'].includes(d.status.toLowerCase());
+  }
+  if (typeof d.text === 'string') {
+    const t = d.text.toLowerCase();
+    return /rebuild/.test(t) && !/idle|done|complete|updat/.test(t);
+  }
+  return false;
+}
+
+function startRebuildPoll() {
+  if (rebuildTimer) clearInterval(rebuildTimer);
+  rebuildTicks = 0;
+  setRebuild('Rebuilding…');
+  rebuildTimer = setInterval(checkRebuild, 1000);
+}
+
+async function checkRebuild() {
+  if (++rebuildTicks > 60) {
+    setRebuild('Rebuild still running', 'err');
+    return;
+  }
+  try {
+    const res = await fetch('/_admin/api/rebuild');
+    let text = '';
+    try { text = await res.text(); } catch (_) { /* no body */ }
+    let data = {};
+    try { data = JSON.parse(text) || {}; } catch (_) { data = { text: text }; }
+    if (!res.ok) {
+      if (rebuildTimer) { clearInterval(rebuildTimer); rebuildTimer = null; }
+      setRebuild('Rebuild error: ' + ((data.error || data.message || text || res.status) + '').trim(), 'err');
+      return;
+    }
+    if (isRebuilding(data)) return;
+    if (rebuildTimer) { clearInterval(rebuildTimer); rebuildTimer = null; }
+    setRebuild('Site updated', 'ok');
+  } catch (e) {
+    if (rebuildTimer) { clearInterval(rebuildTimer); rebuildTimer = null; }
+    setRebuild('Rebuild check failed: ' + e.message, 'err');
+  }
+}
+
+$('btnRefresh').addEventListener('click', () => {
+  loadTree().catch((e) => toast('Tree refresh failed: ' + e.message, 'err'));
+});
+
+$('btnNew').addEventListener('click', () => {
+  const name = (prompt('New page name (e.g. notes/foo.md):') || '').trim();
+  if (!name) return;
+  if (dirty() && confirm('Discard unsaved changes?') === false) return;
+  currentPath = name;
+  baseContent = '';
+  editor.value = '';
+  pageLabel.textContent = name + ' (new)';
+  updateButtons();
+  renderTree();
+});
+
+$('btnSave').addEventListener('click', async () => {
+  if (!currentPath) return;
+  // create if the server does not know the path yet, otherwise save in place
+  const method = pages.includes(currentPath) ? 'PUT' : 'POST';
+  try {
+    await api(method, '/_admin/api/pages', { path: currentPath, content: editor.value });
+    baseContent = editor.value;
+    pageLabel.textContent = currentPath;
+    toast('Saved ' + currentPath, 'ok');
+    afterAction();
+  } catch (e) {
+    toast('Save failed: ' + e.message, 'err');
+  }
+});
+
+$('btnRename').addEventListener('click', async () => {
+  if (!currentPath) return;
+  const to = (prompt('Rename to:', currentPath) || '').trim();
+  if (!to || to === currentPath) return;
+  if (dirty() && confirm('Discard unsaved changes and rename?') === false) return;
+  try {
+    await api('POST', '/_admin/api/pages/move', { from: currentPath, to });
+    currentPath = to;
+    pageLabel.textContent = to;
+    const data = await api('GET', '/_admin/api/pages?path=' + encodeURIComponent(to));
+    baseContent = data.content ?? '';
+    editor.value = baseContent;
+    toast('Renamed', 'ok');
+    afterAction();
+  } catch (e) {
+    toast('Rename failed: ' + e.message, 'err');
+  }
+});
+
+$('btnDelete').addEventListener('click', async () => {
+  if (!currentPath) return;
+  const ask = (dirty() ? 'Unsaved changes will be lost. ' : '') + 'Delete "' + currentPath + '"?';
+  if (confirm(ask) === false) return;
+  try {
+    await api('DELETE', '/_admin/api/pages?path=' + encodeURIComponent(currentPath));
+    clearEditor();
+    toast('Deleted ' + currentPath, 'ok');
+    afterAction();
+  } catch (e) {
+    toast('Delete failed: ' + e.message, 'err');
+  }
+});
+
+editor.addEventListener('input', () => {
+  if (currentPath) pageLabel.textContent = currentPath + (dirty() ? ' •' : '');
+});
+
+window.addEventListener('beforeunload', (e) => {
+  if (dirty()) { e.preventDefault(); e.returnValue = ''; }
+});
+
+window.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    $('btnSave').click();
+  }
+});
+
+loadTree().catch((e) => {
+  toast('Tree reload failed: ' + e.message, 'err');
+  const li = document.createElement('li');
+  li.className = 'empty';
+  li.textContent = '(tree unavailable)';
+  treeEl.textContent = '';
+  treeEl.appendChild(li);
+});
+</script>
+</body>
+</html>

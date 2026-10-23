@@ -1,0 +1,12 @@
+{
+  "en": {
+    "skipLink.label": "Skip to content",
+    "search.label": "Search",
+    "search.ctrlKey": "Ctrl",
+    "search.cancelLabel": "Close",
+    "themeSelect.accessibleLabel": "Select theme",
+    "themeSelect.dark": "Dark",
+    "themeSelect.light": "Light",
+    "themeSelect.auto": "Auto"
+  }
+}

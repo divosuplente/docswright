@@ -1,0 +1,17 @@
+{
+  "name": "__PKG_NAME__",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "docswright sync",
+    "build": "docswright build",
+    "wiki": "docswright wiki",
+    "publish": "docswright publish"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.7.4",
+    "@astrojs/starlight": "^0.42.6",
+    "astro": "^7.4.2",
+    "sharp": "^0.35.5"
+  }
+}

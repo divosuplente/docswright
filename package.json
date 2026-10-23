@@ -1,0 +1,54 @@
+{
+  "name": "docswright",
+  "version": "0.1.0",
+  "description": "Generate Antora-style Markdown documentation sites and a browser-editable wiki.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "docswright": "bin/docswright.mjs"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "files": [
+    "bin",
+    "src",
+    "!src/content",
+    "!src/content.config.ts",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "documentation",
+    "docs",
+    "static-site",
+    "astro",
+    "starlight",
+    "markdown",
+    "wiki",
+    "antora"
+  ],
+  "scripts": {
+    "docswright": "node bin/docswright.mjs",
+    "sync": "node bin/docswright.mjs sync",
+    "build": "node bin/docswright.mjs build",
+    "wiki": "node bin/docswright.mjs wiki",
+    "wiki:publish": "node bin/docswright.mjs publish",
+    "dev": "astro dev"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.0",
+    "commander": "^14.0.0",
+    "hono": "^4.7.0",
+    "tsx": "^4.20.0"
+  },
+  "devDependencies": {
+    "@astrojs/sitemap": "^3.7.4",
+    "@astrojs/starlight": "^0.42.6",
+    "@types/node": "^26.6.5",
+    "astro": "^7.4.2",
+    "sharp": "^0.35.5",
+    "typescript": "^5.7.0"
+  }
+}
