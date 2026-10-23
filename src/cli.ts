@@ -21,9 +21,11 @@ async function syncFromConfig(config: DocsWrightConfig): Promise<void> {
   await syncAll(projectRoot, fetched);
 }
 
+const invoked = path.basename(process.argv[1] ?? 'docswright', path.extname(process.argv[1] ?? ''));
+
 const program = new Command();
 program
-  .name('docswright')
+  .name(invoked)
   .description('Aggregate markdown docs from local/git components and serve an editable wiki.')
   .version('0.1.0');
 

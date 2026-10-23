@@ -5,7 +5,8 @@
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "docswright": "bin/docswright.mjs"
+    "docswright": "bin/docswright.mjs",
+    "dw": "bin/docswright.mjs"
   },
   "engines": {
     "node": ">=20.19"

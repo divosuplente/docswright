@@ -10,9 +10,11 @@ docswright is an executable, not an app. It scaffolds a standalone project (its 
 ## Install
 
 ```sh
-npm install -g docswright     # global command
+npm install -g docswright         # global command
 npx docswright new site my-docs   # or use without installing
 ```
+
+Installs two equivalent commands: `docswright` and the short `dw`.
 
 Node >= 20.19. A project does not need `typescript` or `tsx`: the CLI ships as
 TypeScript and loads its own sources and your `docswright.config.ts` at runtime.
@@ -20,7 +22,7 @@ TypeScript and loads its own sources and your `docswright.config.ts` at runtime.
 ## Quickstart
 
 ```sh
-docswright new site my-docs     # or: docswright new wiki my-wiki
+docswright new site my-docs     # or: dw new site my-docs
 cd my-docs
 npm install
 npm run build                   # sync sources, build the static site
